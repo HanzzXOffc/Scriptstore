@@ -10,11 +10,8 @@ const pino = require('pino');
 const fs = require('fs');
 
 // Inisialisasi penyimpanan
-const store = makeInMemoryStore({ logger: pino().child({ level: 'silent', stream: 'store' }) });
-store.readFromFile('./baileys_store.json');
-setInterval(() => {
-  store.writeToFile('./baileys_store.json');
-}, 10_000);
+const { useMultiFileAuthState, makeCacheableSignalKeyStore, fetchLatestBaileysVersion, makeWASocket, Browsers, makeInMemoryStore } = require('@whiskeysockets/baileys');
+const store = makeInMemoryStore({ logger: pino({ level: 'silent' }).child({ stream: 'store' }) });
 
 // Fungsi utama
 async function startBot() {
