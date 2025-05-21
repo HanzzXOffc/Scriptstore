@@ -1,37 +1,46 @@
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, makeInMemoryStore } = require('@whiskeysockets/baileys');
+const {
+  default: makeWASocket,
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion,
+  makeInMemoryStore,
+  DisconnectReason
+} = require('@whiskeysockets/baileys');
 const pino = require('pino');
 
 async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState('./session');
-    const { version, isLatest } = await fetchLatestBaileysVersion();
+  const { state, saveCreds } = await useMultiFileAuthState('./session');
+  const { version } = await fetchLatestBaileysVersion();
 
-    const sock = makeWASocket({
-        version,
-        logger: pino({ level: 'silent' }),
-        printQRInTerminal: false,
-        auth: state,
-    });
+  const sock = makeWASocket({
+    version,
+    logger: pino({ level: 'silent' }),
+    printQRInTerminal: false,
+    auth: state,
+  });
 
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
-        if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
-            if (shouldReconnect) {
-                startBot();
-            }
-        } else if (connection === 'open') {
-            console.log('Bot sudah tersambung!');
-        }
-    });
+  sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('creds.update', saveCreds);
+  // Tampilkan Pairing Code
+  const code = await sock.requestPairingCode('6281936513894'); // ganti dengan nomor kamu
+  console.log(`Pairing Code WA (22-xxxx format): ${code}`);
 
-    // Tampilkan Pairing Code
-    const code = await sock.requestPairingCode('6281936513894'); // ganti dengan nomor kamu
-    console.log(`Pairing Code WA (22-xxxx format): ${code}`);
-}
+  // Event koneksi
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect } = update;
+    if (connection === 'close') {
+      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+      console.log('Koneksi terputus, reconnecting...', shouldReconnect);
+      if (shouldReconnect) {
+        startBot();
+      } else {
+        console.log('Anda telah logout.');
+      }
+    } else if (connection === 'open') {
+      console.log('Bot Store aktif dan siap digunakan.');
+    }
+  });
 
-  // Menangani pesan masuk
+  // Event pesan masuk
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
     const msg = messages[0];
@@ -116,23 +125,6 @@ Contoh: ketik *buyadp* untuk beli ADP.`,
         });
     }
   });
-
-  // Reconnect otomatis
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect } = update;
-    if (connection === 'close') {
-      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.log('Koneksi terputus, reconnecting...', shouldReconnect);
-      if (shouldReconnect) {
-        startBot();
-      } else {
-        console.log('Anda telah logout.');
-      }
-    } else if (connection === 'open') {
-      console.log('Bot Store aktif dan siap digunakan.');
-    }
-  });
-
-  sock.ev.on('creds.update', saveCreds);
+}
 
 startBot();
