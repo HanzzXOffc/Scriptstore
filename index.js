@@ -1,40 +1,35 @@
-const {
-  default: makeWASocket,
-  useMultiFileAuthState,
-  makeInMemoryStore,
-  DisconnectReason,
-  fetchLatestBaileysVersion,
-} = require('@whiskeysockets/baileys');
-
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, makeInMemoryStore } = require('@whiskeysockets/baileys');
 const pino = require('pino');
-const fs = require('fs');
 
-// Inisialisasi penyimpanan
-const { useMultiFileAuthState, makeCacheableSignalKeyStore, fetchLatestBaileysVersion, makeWASocket, Browsers, makeInMemoryStore } = require('@whiskeysockets/baileys');
-const store = makeInMemoryStore({ logger: pino({ level: 'silent' }).child({ stream: 'store' }) });
-
-// Fungsi utama
 async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
-  const { version } = await fetchLatestBaileysVersion();
+    const { state, saveCreds } = await useMultiFileAuthState('./session');
+    const { version, isLatest } = await fetchLatestBaileysVersion();
 
-  const sock = makeWASocket({
-    version,
-    printQRInTerminal: false,
-    auth: state,
-    logger: pino({ level: 'silent' }),
-    browser: ['Bot Store', 'Chrome', '1.0.0'],
-    getMessage: async (key) => ({ conversation: 'Bot Store' }),
-  });
+    const sock = makeWASocket({
+        version,
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: false,
+        auth: state,
+    });
 
-  store.bind(sock.ev);
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
+            if (shouldReconnect) {
+                startBot();
+            }
+        } else if (connection === 'open') {
+            console.log('Bot sudah tersambung!');
+        }
+    });
 
-  // Pairing code jika belum login
-  if (!sock.authState.creds.registered) {
-    const phoneNumber = '6281936513894'; // Ganti dengan nomor Anda
-    const code = await sock.requestPairingCode(phoneNumber);
-    console.log(`Pairing Code untuk nomor ${phoneNumber}: ${code}`);
-  }
+    sock.ev.on('creds.update', saveCreds);
+
+    // Tampilkan Pairing Code
+    const code = await sock.requestPairingCode('6281936513894'); // ganti dengan nomor kamu
+    console.log(`Pairing Code WA (22-xxxx format): ${code}`);
+}
 
   // Menangani pesan masuk
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
