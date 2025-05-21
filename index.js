@@ -134,6 +134,5 @@ Contoh: ketik *buyadp* untuk beli ADP.`,
   });
 
   sock.ev.on('creds.update', saveCreds);
-}
 
 startBot();
